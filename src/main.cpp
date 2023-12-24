@@ -84,12 +84,12 @@ int drivePID() {
     if (resetDriveSensors) {
       resetDriveSensors = false;
 
-      LeftMotorA.setPosition(0, degrees);
-      RightMotorA.setPosition(0, degrees);
+      LeftMotor.setPosition(0, degrees);
+      RightMotor.setPosition(0, degrees);
     }
 
-    int leftMotorPosition = LeftMotorA.position(degrees);
-    int rightMotorPosition = RightMotorA.position(degrees);
+    int leftMotorPosition = LeftMotor.position(degrees);
+    int rightMotorPosition = RightMotor.position(degrees);
 
     // ------------------
     // lateral movement pid
@@ -128,8 +128,8 @@ int drivePID() {
     double turnMotorPower = (turnError * turnkP + turnDerivative * turnkD );
 
 
-    LeftMotorA.spin(forward, lateralMotorPower + turnMotorPower, voltageUnits::volt);
-    RightMotorA.spin(forward, lateralMotorPower - turnMotorPower, voltageUnits::volt);
+    LeftMotor.spin(forward, lateralMotorPower + turnMotorPower, voltageUnits::volt);
+    RightMotor.spin(forward, lateralMotorPower - turnMotorPower, voltageUnits::volt);
     
     prevError = error;
     turnPrevError = turnError;
@@ -138,6 +138,40 @@ int drivePID() {
   }
 
   return 1;
+}
+
+float WHEEL_DIAM = 4.125;
+float PI = 3.1415;
+
+
+void emma_inertial_drive_forward(float target) {
+  float x = 0.0;
+  float error = target - x;
+  float speed = 75.0;
+  float accuracy = 0.2;
+  float ks = 1.0;
+  float yaw = 0.0;
+
+  float lspeed = speed * fabs(error) / error - ks * yaw;
+  float rspeed = speed * fabs(error) / error + ks * yaw;
+
+  inertialSensor.setRotation(0.0, deg);
+  rightmotorA.setRotation(0.0, rev);
+
+  while (fabs(error) > accuracy) {
+    RightMotor.spin(forward);
+    LeftMotor.spin(forward);
+
+    x = rightmotorA.position(rev) * PI * WHEEL_DIAM;
+
+    error = target - x; 
+
+    yaw = inertialSensor.rotation(degrees);
+
+    lspeed = speed * fabs(error) / error - ks * yaw;
+    rspeed = speed * fabs(error) / error + ks * yaw;
+  }
+
 }
 
 /*---------------------------------------------------------------------------*/
