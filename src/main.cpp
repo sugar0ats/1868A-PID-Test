@@ -50,9 +50,9 @@ void pre_auton(void) {
 // increase kD 
 
 //settings
-double kP = 0.00004;
-double kI = 0.0;
-double kD = 0.0;
+double kP =0.1;
+//double kI = 0.00001;
+double kD = 0.1;
 
 double turnkP = 0.0;
 double turnkI = 0.0;
@@ -60,7 +60,7 @@ double turnkD = 0.0;
 
 //autonomous settings
 int desiredValue = 200; // in degrees
-int desiredTurnValue = 300;
+int desiredTurnValue = 0;
 
 int error; // current sensor value - desired value: positional value
 int prevError = 0; // position 20 milliseconds ago
@@ -72,6 +72,10 @@ int turnError; // current sensor value - desired value: positional value
 int turnPrevError = 0; // position 20 milliseconds ago
 int turnDerivative; // error - prevError (slope of position is speed)
 int turnTotalError = 0;
+
+float WHEEL_DIAM = 4.125;
+float PI = 3.1415;
+float GEAR_RATIO = 84.0 / 36.0;
 
 bool resetDriveSensors = false;
 
@@ -91,6 +95,9 @@ int drivePID() {
     int leftMotorPosition = LeftMotor.position(degrees);
     int rightMotorPosition = RightMotor.position(degrees);
 
+     printf("left motor pos is %i\n", leftMotorPosition);
+     printf("right motor pos is %i\n", rightMotorPosition);
+
     // ------------------
     // lateral movement pid
     // ------------------
@@ -99,7 +106,7 @@ int drivePID() {
     int averagePosition = (leftMotorPosition + rightMotorPosition) / 2;
 
     //potential
-    error = averagePosition - desiredValue;
+    error = desiredValue - averagePosition;
 
     // derivative
     derivative = error - prevError;
@@ -127,9 +134,11 @@ int drivePID() {
 
     double turnMotorPower = (turnError * turnkP + turnDerivative * turnkD );
 
-
-    LeftMotor.spin(forward, lateralMotorPower + turnMotorPower, voltageUnits::volt);
-    RightMotor.spin(forward, lateralMotorPower - turnMotorPower, voltageUnits::volt);
+    printf("lateral power is %f\n", lateralMotorPower);
+    printf("error is %i\n", error);
+    
+    RightMotor.spin(forward, lateralMotorPower, voltageUnits::volt);
+    LeftMotor.spin(forward, lateralMotorPower, voltageUnits::volt);
     
     prevError = error;
     turnPrevError = turnError;
@@ -140,8 +149,7 @@ int drivePID() {
   return 1;
 }
 
-float WHEEL_DIAM = 4.125;
-float PI = 3.1415;
+
 
 
 void emma_inertial_drive_forward(float target) {
@@ -154,15 +162,17 @@ void emma_inertial_drive_forward(float target) {
 
   float lspeed = speed * fabs(error) / error - ks * yaw;
   float rspeed = speed * fabs(error) / error + ks * yaw;
+  float pint = 0.01;
 
   inertialSensor.setRotation(0.0, deg);
   rightmotorA.setRotation(0.0, rev);
 
   while (fabs(error) > accuracy) {
+    printf("error is %f\n", error);
     RightMotor.spin(forward);
     LeftMotor.spin(forward);
 
-    x = rightmotorA.position(rev) * PI * WHEEL_DIAM;
+    x = rightmotorA.position(rev) * PI * WHEEL_DIAM * pint;
 
     error = target - x; 
 
@@ -191,13 +201,15 @@ void autonomous(void) {
 
   vex::task callTask(drivePID); // callTask can be used to modify the task - this starts the task
   resetDriveSensors = true;
-  desiredValue = 300;
-  desiredTurnValue = 600;
+  desiredValue = (12 / (WHEEL_DIAM * PI)) * 360 * GEAR_RATIO;
 
-  vex::task::sleep(1000);
-  resetDriveSensors = true;
-  desiredValue = 600;
-  desiredTurnValue = -600;
+  //desiredTurnValue = 600;
+
+  //vex::task::sleep(1000);
+  // resetDriveSensors = true;
+  // desiredValue = 600;
+  // desiredTurnValue = -600;
+  //emma_inertial_drive_forward(1);
 
 
 }
