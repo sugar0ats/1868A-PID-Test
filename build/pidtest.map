@@ -72,6 +72,7 @@ Discarded input sections
                 0x0000000000000000      0x168 build/src/main.o
  .ARM.exidx.text._Z27emma_inertial_drive_forwardf
                 0x0000000000000000        0x8 build/src/main.o
+ .data.kI       0x0000000000000000        0x8 build/src/main.o
  .bss.turnkP    0x0000000000000000        0x8 build/src/main.o
  .bss.turnkI    0x0000000000000000        0x8 build/src/main.o
  .bss.turnkD    0x0000000000000000        0x8 build/src/main.o
