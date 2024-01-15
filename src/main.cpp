@@ -135,6 +135,10 @@ void emma_inertial_drive_forward(float target) {
     rspeed = speed * fabs(error) / error + ks * yaw;
   }
 }
+int inchesToDegrees(float inches){
+  desiredValue = (inches / (WHEEL_DIAM * PI)) * 360 * GEAR_RATIO;
+  return desiredValue;
+}
 /*---------------------------------------------------------------------------*/
 /*                                                                           */
 /*                              Autonomous Task                              */
@@ -145,10 +149,51 @@ void emma_inertial_drive_forward(float target) {
 /*  You must modify the code to add your own robot specific commands here.   */
 /*---------------------------------------------------------------------------*/
 void autonomous(void) {
+  Catapult.spinFor(40, seconds);
+  desiredTurnValue = -27;
+  vex::task callTask(drivePID); // callTask can be used to modify the task - this starts the task
+  vex::task::sleep(500);
+  desiredValue = inchesToDegrees(85);
+  desiredTurnValue = 0;
+  vex::task::sleep(500);
+  desiredValue = 0;
+  desiredTurnValue = 110;
+  vex::task::sleep(500);
+  desiredValue = inchesToDegrees(49);
+  desiredTurnValue = 0;
+  vex::task::sleep(500);
+  desiredValue = 0;
+  desiredTurnValue = -110;
+  vex::task::sleep(500);
+  wings.set(true);
+  desiredValue = inchesToDegrees(21);
+  desiredTurnValue = 0;
+  vex::task::sleep(500);
+  desiredValue = inchesToDegrees(-21);
+  desiredTurnValue = 0;
+  wings.set(false);
+  vex::task::sleep(500);
+  desiredValue = 0;
+  desiredTurnValue = -90;
+  vex::task::sleep(500);
+  desiredValue =  inchesToDegrees(24);
+  desiredTurnValue = 0;
+  vex::task::sleep(500);
+  desiredValue = 0;
+  desiredTurnValue = -90;
+  vex::task::sleep(500);
+  wings.set(true);
+  desiredValue = inchesToDegrees(20);
+  desiredTurnValue = 0;
+  vex::task::sleep(500);
+  desiredValue = inchesToDegrees(-20);
+  desiredTurnValue = 0;
+  wings.set(false);
+  vex::task::sleep(500);
   // ..........................................................................
   // Insert autonomous user code here.
   // ..........................................................................
-  vex::task callTask(drivePID); // callTask can be used to modify the task - this starts the task
+  
   resetDriveSensors = true;
   desiredValue = (20 / (WHEEL_DIAM * PI)) * 360 * GEAR_RATIO;
   //desiredTurnValue = 600;
