@@ -41,6 +41,12 @@ competition Competition;
 void pre_auton(void) {
   // Initializing Robot Configuration. DO NOT REMOVE!
   vexcodeInit();
+  wings.set(true);
+
+  inertialSensor.calibrate();
+  while(inertialSensor.isCalibrating()){
+    wait(100,msec);
+  }
 
   // All activities that occur before the competition starts
   // Example: clearing encoders, setting servo positions, ...
@@ -50,13 +56,13 @@ void pre_auton(void) {
 // increase kD 
 
 //settings
-double kP =0.1;
-//double kI = 0.00001;
-double kD = 0.1;
+double kP =0.01;
+double kI = 0.00002;
+double kD = 0.001;
 
-double turnkP = 0.0;
-double turnkI = 0.0;
-double turnkD = 0.0;
+double turnkP = 0.106;
+double turnkI = 0;
+double turnkD = 0.0035;
 
 //autonomous settings
 int desiredValue = 200; // in degrees
@@ -77,6 +83,11 @@ float WHEEL_DIAM = 4.125;
 float PI = 3.1415;
 float GEAR_RATIO = 84.0 / 36.0;
 
+float postSlapperAdjustmentAngle;
+
+int turnDirection = 1;
+bool turnLeft = true;
+
 bool resetDriveSensors = false;
 
 // variables modified for use
@@ -90,13 +101,14 @@ int drivePID() {
 
       LeftMotor.setPosition(0, degrees);
       RightMotor.setPosition(0, degrees);
+      inertialSensor.resetRotation();
     }
 
     int leftMotorPosition = LeftMotor.position(degrees);
     int rightMotorPosition = RightMotor.position(degrees);
 
-     printf("left motor pos is %i\n", leftMotorPosition);
-     printf("right motor pos is %i\n", rightMotorPosition);
+    //  printf("left motor pos is %i\n", leftMotorPosition);
+    //  printf("right motor pos is %i\n", rightMotorPosition);
 
     // ------------------
     // lateral movement pid
@@ -112,33 +124,41 @@ int drivePID() {
     derivative = error - prevError;
 
     // velocity -> position (integral)
-    // totalError += error; // compound error 
+    totalError += error; // compound error 
 
-    double lateralMotorPower = (error * kP + derivative * kD);
+    double lateralMotorPower = (error * kP + derivative * kD + totalError * kI);
 
     // ------------------
     // TURN PID
     // ------------------
 
     // get average of the motors
-    int turnDifference = leftMotorPosition - rightMotorPosition;
-
+    // int turnDifference = leftMotorPosition - rightMotorPosition;
     //potential
-    turnError = turnDifference - desiredTurnValue;
+    turnError = desiredTurnValue - inertialSensor.rotation(deg);
 
     // derivative
     turnDerivative = turnError - turnPrevError;
 
     // velocity -> position (integral)
-    // turnTotalError += turnError; // compound error 
+    turnTotalError += turnError; // compound error 
 
-    double turnMotorPower = (turnError * turnkP + turnDerivative * turnkD );
+    // if (desiredTurnValue >= 0) { // if the desired angle is achieved by turning right,
+    //   turnDirection = -1; // make sure we're turning right
+    // } else {
+    //   turnDirection = 1; // turn left!
+    // }
 
-    printf("lateral power is %f\n", lateralMotorPower);
-    printf("error is %i\n", error);
+    double turnMotorPower = (turnError * turnkP + turnDerivative * turnkD + turnTotalError * turnkI);
+
+    printf("turn power is %f\n", turnMotorPower);
+    printf("turn error is %i\n", turnError);
+    printf("inertial rotation value is %f\n", inertialSensor.rotation(deg));
+    //printf("direction of turning (1 means left, -1 means right) %i\n", turnDirection);
+    printf("-----\n");
     
-    RightMotor.spin(forward, lateralMotorPower, voltageUnits::volt);
-    LeftMotor.spin(forward, lateralMotorPower, voltageUnits::volt);
+    RightMotor.spin(forward, lateralMotorPower - turnMotorPower, voltageUnits::volt); // always turning left
+    LeftMotor.spin(forward, lateralMotorPower + turnMotorPower, voltageUnits::volt);
     
     prevError = error;
     turnPrevError = turnError;
@@ -149,68 +169,101 @@ int drivePID() {
   return 1;
 }
 
-
-
-
-void emma_inertial_drive_forward(float target) {
-  float x = 0.0;
-  float error = target - x;
-  float speed = 75.0;
-  float accuracy = 0.2;
-  float ks = 1.0;
-  float yaw = 0.0;
-
-  float lspeed = speed * fabs(error) / error - ks * yaw;
-  float rspeed = speed * fabs(error) / error + ks * yaw;
-  float pint = 0.01;
-
-  inertialSensor.setRotation(0.0, deg);
-  rightmotorA.setRotation(0.0, rev);
-
-  while (fabs(error) > accuracy) {
-    printf("error is %f\n", error);
-    RightMotor.spin(forward);
-    LeftMotor.spin(forward);
-
-    x = rightmotorA.position(rev) * PI * WHEEL_DIAM * pint;
-
-    error = target - x; 
-
-    yaw = inertialSensor.rotation(degrees);
-
-    lspeed = speed * fabs(error) / error - ks * yaw;
-    rspeed = speed * fabs(error) / error + ks * yaw;
-  }
-
+double inchesToDegrees(double inches) {
+  return (inches / (WHEEL_DIAM * PI)) * 360 * GEAR_RATIO;
 }
 
-/*---------------------------------------------------------------------------*/
-/*                                                                           */
-/*                              Autonomous Task                              */
-/*                                                                           */
-/*  This task is used to control your robot during the autonomous phase of   */
-/*  a VEX Competition.                                                       */
-/*                                                                           */
-/*  You must modify the code to add your own robot specific commands here.   */
-/*---------------------------------------------------------------------------*/
+double angleTurnToZero(double inputAngle) {
+  return (inputAngle > 180 ? 360 - inputAngle : inputAngle * -1);
+  // if the heading is left of 0, for ex 355, then we get an output of 5 degrees (so we need to turn 5 degrees right to adjust)
+  // if the heading is right of 0, for ex 15, then we get an output of -15 degrees (so we need to turn 15 degrees left to adjust)
+}
 
 void autonomous(void) {
-  // ..........................................................................
-  // Insert autonomous user code here.
-  // ..........................................................................
-
+  //Catapult.spinFor();
+  
+  
   vex::task callTask(drivePID); // callTask can be used to modify the task - this starts the task
+  // SET UP AND PARK
+  //vex::task::sleep(2000);
   resetDriveSensors = true;
-  desiredValue = (12 / (WHEEL_DIAM * PI)) * 360 * GEAR_RATIO;
+  desiredValue = 0;
+  desiredTurnValue = 0;
 
-  //desiredTurnValue = 600;
+  Catapult.setVelocity(40, rpm);
+  Catapult.spinFor(forward, 5, sec);
 
-  //vex::task::sleep(1000);
-  // resetDriveSensors = true;
-  // desiredValue = 600;
-  // desiredTurnValue = -600;
-  //emma_inertial_drive_forward(1);
+  Catapult.spin(forward);
+  waitUntil((int) rotationSensor.angle(deg) % 180 >= 0 && (int) rotationSensor.angle(deg) % 180 <= 5);
+  Catapult.stop();
 
+
+  resetDriveSensors = true;
+  desiredValue = -3;
+  desiredTurnValue = 0;
+ 
+  vex::task::sleep(2000);
+  resetDriveSensors = true;
+  desiredValue = 0;
+  desiredTurnValue = -44;
+
+  vex::task::sleep(2000);
+  resetDriveSensors = true;
+  desiredValue = inchesToDegrees(-80);
+  desiredTurnValue = 0;
+
+  vex::task::sleep(5000);
+  resetDriveSensors = true;
+  desiredValue = 0;
+  desiredTurnValue = -73;
+
+  vex::task::sleep(1000);
+  resetDriveSensors = true;
+  desiredValue = inchesToDegrees(50);
+  desiredTurnValue = 0;
+
+  vex::task::sleep(1000);
+  resetDriveSensors = true;
+  desiredValue = 0;
+  desiredTurnValue = -110;
+
+  wings.set(false);
+  vex::task::sleep(1000);
+  resetDriveSensors = true;
+  desiredValue = inchesToDegrees(26);
+  desiredTurnValue = 0;
+
+  vex::task::sleep(1000);
+  wings.set(true);
+  resetDriveSensors = true;
+  desiredValue = inchesToDegrees(-24);
+  desiredTurnValue = 0;
+
+  vex::task::sleep(1000);
+  resetDriveSensors = true;
+  desiredValue = 0;
+  desiredTurnValue = 90;
+
+  vex::task::sleep(1000);
+  resetDriveSensors = true;
+  desiredValue = inchesToDegrees(18);
+  desiredTurnValue = 0;
+  
+  vex::task::sleep(1000);
+  resetDriveSensors = true;
+  desiredValue = 0;
+  desiredTurnValue = -90;
+
+  wings.set(false);
+  vex::task::sleep(1000);
+  
+  resetDriveSensors = true;
+  desiredValue = inchesToDegrees(28);
+  desiredTurnValue = 0;
+
+
+
+  
 
 }
 
@@ -230,6 +283,7 @@ void usercontrol(void) {
     // This is the main execution loop for the user control program.
     // Each time through the loop your program should update motor + servo
     // values based on feedback from the joysticks.
+    printf("inertial sensor heading is is %f\n", inertialSensor.rotation(deg));
 
     // ........................................................................
     // Insert user code here. This is where you use the joystick values to
